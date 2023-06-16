@@ -21,10 +21,10 @@ class Pin {
 private:
     sf::RectangleShape shape;
     sf::Vector2f offset;
-    PinType pinType;
+    
     
 public:
-
+    PinType pinType;
     Pin* connectedTo;
 
     void static onPinClicked(Pin * pin) {
@@ -35,8 +35,14 @@ public:
             // both pins selected ...
             std::cout << "Both pins selected" << std::endl;
 
-            firstPinSelected->connectedTo = pin;
-            pin->connectedTo = firstPinSelected;
+            if (
+                (firstPinSelected->pinType == PinType::Input && pin->pinType == PinType::Output) ||
+                (firstPinSelected->pinType == PinType::Output && pin->pinType == PinType::Input)
+                ) {
+                firstPinSelected->connectedTo = pin;
+                pin->connectedTo = firstPinSelected;
+            }
+            
 
             firstPinSelected = nullptr;
         }
