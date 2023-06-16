@@ -53,6 +53,18 @@ public:
         pinType = pt;
     }
 
+    static void drawTempConnection(sf::RenderTarget& target, sf::Vector2f mousePos) {
+        if (firstPinSelected == nullptr) { return; }
+
+        sf::Vertex line[2];
+        line[0].position = firstPinSelected->getPosition();
+        line[0].color = sf::Color(255,127,0);
+        line[1].position = mousePos;
+        line[1].color = sf::Color(255, 127, 0);
+
+        target.draw(line, 2, sf::Lines);
+    }
+
     void drawConnection(sf::RenderTarget& target) {
         if (connectedTo == nullptr) { return; }
 
@@ -238,6 +250,8 @@ int main()
         for (auto gate : gates) {
             gate->draw(window);
         }
+
+        Pin::drawTempConnection(window, sf::Vector2f(sf::Mouse::getPosition(window)));
         window.display();
     }
     return 0;
