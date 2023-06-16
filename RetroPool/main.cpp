@@ -12,7 +12,7 @@ Pin* hoveredPin = nullptr;
 
 Pin* firstPinSelected = nullptr;
 
-class Pin : public sf::Drawable {
+class Pin {
 private:
     sf::RectangleShape shape;
     sf::Vector2f offset;
@@ -43,7 +43,7 @@ public:
         shape.setPosition(pos + offset);
     }
 
-    virtual void draw(sf::RenderTarget& target, sf::RenderStates states) const {
+    void draw(sf::RenderTarget& target) {
         target.draw(shape);
     }
 
@@ -76,7 +76,7 @@ public:
     }
 };
 
-class ORGate : public sf::Drawable {
+class ORGate {
 private:
     sf::RectangleShape body;
     Pin inputA, inputB, output;
@@ -119,11 +119,11 @@ public:
         return body.getGlobalBounds().contains(sf::Vector2f(x,y));
     }
 
-    virtual void draw(sf::RenderTarget& target, sf::RenderStates states) const {
+    void draw(sf::RenderTarget& target) {
         target.draw(body);
-        target.draw(inputA);
-        target.draw(inputB);
-        target.draw(output);
+        inputA.draw(target);
+        inputB.draw(target);
+        output.draw(target);
         target.draw(text);
     }
 };
@@ -198,7 +198,7 @@ int main()
 
         window.clear(clearColor);
         for (auto gate : gates) {
-            window.draw(*gate);
+            gate->draw(window);
         }
         window.display();
     }
