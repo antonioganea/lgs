@@ -39,6 +39,15 @@ public:
                 (firstPinSelected->pinType == PinType::Input && pin->pinType == PinType::Output) ||
                 (firstPinSelected->pinType == PinType::Output && pin->pinType == PinType::Input)
                 ) {
+
+                if (firstPinSelected->connectedTo != nullptr) {
+                    firstPinSelected->connectedTo->connectedTo = nullptr; //on firstPinSelected unhook
+                }
+
+                if (pin->connectedTo != nullptr) {
+                    pin->connectedTo->connectedTo = nullptr; // on pin unhook
+                }
+
                 firstPinSelected->connectedTo = pin;
                 pin->connectedTo = firstPinSelected;
             }
