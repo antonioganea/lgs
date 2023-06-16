@@ -12,11 +12,21 @@ Pin* hoveredPin = nullptr;
 
 Pin* firstPinSelected = nullptr;
 
+enum class PinType {
+    Input,
+    Output
+};
+
 class Pin {
 private:
     sf::RectangleShape shape;
     sf::Vector2f offset;
+    PinType pinType;
+    
 public:
+
+    Pin* connectedTo;
+
     void static onPinClicked(Pin * pin) {
         if (firstPinSelected == nullptr) {
             firstPinSelected = pin;
@@ -24,19 +34,43 @@ public:
         else {
             // both pins selected ...
             std::cout << "Both pins selected and hooked" << std::endl;
+
+            firstPinSelected->connectedTo = pin;
+            pin->connectedTo = firstPinSelected;
+
             firstPinSelected = nullptr;
         }
     }
 
-    Pin() {
+    Pin(PinType pt) {
+        connectedTo = nullptr;
+
         shape.setSize(sf::Vector2f(10, 10));
         shape.setFillColor(sf::Color(200, 200, 200));
         shape.setOrigin(5, 5);
         shape.setPosition(-25 + 5, 25 + 5);
+
+        pinType = pt;
+    }
+
+    void drawConnection(sf::RenderTarget& target) {
+        if (connectedTo == nullptr) { return; }
+
+        sf::Vertex line[2];
+        line[0].position = shape.getPosition();
+        line[0].color = sf::Color::Red;
+        line[1].position = connectedTo->getPosition();
+        line[1].color = sf::Color::Red;
+
+        target.draw(line, 2, sf::Lines);
     }
 
     void setOffset(sf::Vector2f off) {
         offset = off;
+    }
+
+    sf::Vector2f getPosition() {
+        return shape.getPosition();
     }
 
     void setPosition(sf::Vector2f pos) {
@@ -45,6 +79,10 @@ public:
 
     void draw(sf::RenderTarget& target) {
         target.draw(shape);
+
+        if (pinType == PinType::Output) {
+            drawConnection(target);
+        }
     }
 
     bool pinHover(sf::Vector2f pos) {
@@ -82,7 +120,7 @@ private:
     Pin inputA, inputB, output;
     sf::Text text;
 public:
-    ORGate() {
+    ORGate() : inputA(PinType::Input), inputB(PinType::Input), output(PinType::Output) {
         body.setSize(sf::Vector2f(50, 50));
         body.setFillColor(sf::Color(64,64,64));
         body.setOrigin(25, 25);
