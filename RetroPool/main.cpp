@@ -85,9 +85,9 @@ public:
 
         sf::Vertex line[2];
         line[0].position = shape.getPosition();
-        line[0].color = sf::Color::Red;
+        line[0].color = sf::Color(3, 127, 252);
         line[1].position = connectedTo->getPosition();
-        line[1].color = sf::Color::Red;
+        line[1].color = sf::Color(3, 127, 252);
 
         target.draw(line, 2, sf::Lines);
     }
