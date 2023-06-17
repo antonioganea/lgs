@@ -326,6 +326,77 @@ public:
     }
 };
 
+class Switch : public Gate {
+private:
+    sf::RectangleShape body;
+    sf::RectangleShape indicator;
+    Pin output;
+    sf::Text text;
+    bool state = false;
+public:
+
+    static Switch* clickedOn;
+
+    Switch() : output(PinType::Output) {
+        body.setSize(sf::Vector2f(50, 50));
+        body.setFillColor(sf::Color(64, 64, 64));
+        body.setOrigin(25, 25);
+
+        output.setOffset(sf::Vector2f(0, -25 - 5));
+
+        text.setFont(font);
+        text.setString("Switch");
+        text.setCharacterSize(12);
+
+        indicator.setSize(sf::Vector2f(5, 5));
+        indicator.setFillColor(sf::Color::Red);
+        indicator.setOrigin(2.5f, 2.5f + 10.f);
+
+        position(sf::Vector2f(0, 0));
+    }
+
+    void toggle() {
+        std::cout << "TOGGLED SWITCH" << std::endl;
+
+        state = !state;
+
+        indicator.setFillColor(state ? sf::Color::Green : sf::Color::Red);
+    }
+
+    bool tryClick(sf::Vector2f pos) {
+        return output.tryClick(pos);
+    }
+
+    bool tryRightClick(sf::Vector2f pos) {
+        return output.tryRightClick(pos);
+    }
+
+    bool pinHover(sf::Vector2f pos) {
+        return output.pinHover(pos);
+    }
+
+    void position(sf::Vector2f pos) {
+        body.setPosition(pos);
+        output.setPosition(pos);
+        indicator.setPosition(pos);
+
+        sf::FloatRect textRect = text.getGlobalBounds();
+        text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
+    }
+
+    bool isInBounds(float x, float y) {
+        return body.getGlobalBounds().contains(sf::Vector2f(x, y));
+    }
+
+    void draw(sf::RenderTarget& target) {
+        target.draw(body);
+        output.draw(target);
+        target.draw(indicator);
+        target.draw(text);
+    }
+};
+Switch* Switch::clickedOn = nullptr;
+
 int main()
 {
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Logic Gate Simulator");
@@ -335,11 +406,16 @@ int main()
 
     std::vector<Gate*> gates;
 
-    gates.push_back(new ORGate());
+    auto starterGate = new ORGate();
+    starterGate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT)/2.0f);
+    gates.push_back(starterGate);
 
     font.loadFromFile("assets/roboto.ttf"); // TODO : better font loading
 
     sf::Color clearColor = sf::Color(32, 32, 32);
+
+    sf::View board(sf::Vector2f(0, 0), sf::Vector2f(600, 600));
+    board.setViewport(sf::FloatRect(0,0,0.5,1));
 
     while (window.isOpen())
     {
@@ -361,6 +437,11 @@ int main()
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
+                if (event.key.code == sf::Keyboard::E) {
+                    auto gate = new Switch();
+                    gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
+                    gates.push_back(gate);
+                }
             }
 
             if (event.type == event.MouseButtonPressed) {
@@ -368,6 +449,12 @@ int main()
                     if (gate->isInBounds(event.mouseButton.x, event.mouseButton.y)) {
                         std::cout << "Click";
                         held = gate;
+
+                        Switch* sw = dynamic_cast<Switch*>(gate);
+
+                        if (sw != nullptr) {
+                            Switch::clickedOn = sw;
+                        }
 
                         break;
                     }
@@ -380,6 +467,7 @@ int main()
                         }
                     }
                     else if (event.mouseButton.button == sf::Mouse::Right) {
+                        firstPinSelected = nullptr;
                         if (gate->tryRightClick(sf::Vector2f(event.mouseButton.x, event.mouseButton.y))) {
                             std::cout << "Pin right click" << std::endl;
 
@@ -392,9 +480,17 @@ int main()
 
             if (event.type == event.MouseButtonReleased) {
                 held = nullptr;
+
+                if (Switch::clickedOn != nullptr) {
+                    Switch::clickedOn->toggle();
+                    Switch::clickedOn = nullptr;
+                }
             }
 
             if (event.type == event.MouseMoved) {
+
+                Switch::clickedOn = nullptr;
+
                 if (held != nullptr) {
                     held->position(sf::Vector2f(event.mouseMove.x, event.mouseMove.y));
                 }
@@ -409,7 +505,10 @@ int main()
             }
         }
 
+        
+
         window.clear(clearColor);
+        //window.setView(board);
         for (auto gate : gates) {
             gate->draw(window);
         }
