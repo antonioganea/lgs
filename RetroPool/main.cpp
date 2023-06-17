@@ -76,6 +76,9 @@ public:
     }
 };
 
+// not working
+#define TRY_RUN_EVERYTHING_ONCE
+
 class Simulation {
 private:
     Simulation();
@@ -83,18 +86,36 @@ private:
 public:
     static std::queue<SimulationUpdate> updateQueue;
 
+#ifdef TRY_RUN_EVERYTHING_ONCE
+    static int updatesThisFrame;
+#endif
+
     static void queueUpdate(Pin * pin, bool newState) {
         updateQueue.emplace(pin, newState);
+
+#ifdef TRY_RUN_EVERYTHING_ONCE
+        updatesThisFrame++;
+#endif
+
         std::cout << "Size of queue " << updateQueue.size() << std::endl;
     }
     
     static void processTick() {
-        if (updateQueue.size() == 0) { return; }
-        updateQueue.front().affectedPin->update(updateQueue.front().newState);
-        updateQueue.pop();
+#ifdef TRY_RUN_EVERYTHING_ONCE
+        int i = updatesThisFrame;
+        updatesThisFrame = 0;
+        for (; i > 0; i--) {
+#endif
+            if (updateQueue.size() == 0) { return; }
+            updateQueue.front().affectedPin->update(updateQueue.front().newState);
+            updateQueue.pop();
+        }
+#ifdef TRY_RUN_EVERYTHING_ONCE
     }
+#endif
 };
 std::queue<SimulationUpdate> Simulation::updateQueue;
+int Simulation::updatesThisFrame = 0;
 
 
 
