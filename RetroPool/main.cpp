@@ -1,5 +1,7 @@
 #include <SFML/Graphics.hpp>
 #include <iostream>
+#include <vector>
+#include <algorithm>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
@@ -26,6 +28,27 @@ private:
 public:
     PinType pinType;
     Pin* connectedTo;
+    std::vector<Pin*> outputs;
+
+    void static connectPins(Pin* A, Pin* B) {
+        if (A->pinType == PinType::Output) {
+            std::swap(A, B);
+        }
+
+        // A is input, B is output
+
+        /*
+        if (A->connectedTo != nullptr) {
+            std::remove(A->connectedTo->outputs.begin(), A->connectedTo->outputs.end(), A);
+        }
+        */
+
+        A->disconnectAll();
+
+        A->connectedTo = B;
+
+        B->outputs.push_back(A);
+    }
 
     void static onPinClicked(Pin * pin) {
         if (firstPinSelected == nullptr) {
@@ -40,6 +63,7 @@ public:
                 (firstPinSelected->pinType == PinType::Output && pin->pinType == PinType::Input)
                 ) {
 
+                /*
                 if (firstPinSelected->connectedTo != nullptr) {
                     firstPinSelected->connectedTo->connectedTo = nullptr; //on firstPinSelected unhook
                 }
@@ -50,10 +74,32 @@ public:
 
                 firstPinSelected->connectedTo = pin;
                 pin->connectedTo = firstPinSelected;
+                */
+                connectPins(firstPinSelected, pin);
             }
             
 
             firstPinSelected = nullptr;
+        }
+    }
+
+    void static onPinRightClicked(Pin* pin) {
+        pin->disconnectAll();
+    }
+
+    void disconnectAll() {
+        if (pinType == PinType::Input) {
+            if (connectedTo == nullptr) { return; }
+            connectedTo->outputs.erase(std::remove(connectedTo->outputs.begin(), connectedTo->outputs.end(), this), connectedTo->outputs.end());
+            connectedTo = nullptr;
+            return;
+        }
+        if (pinType == PinType::Output) {
+            for (auto other : outputs) {
+                other->connectedTo = nullptr;
+            }
+            outputs.clear();
+            return;
         }
     }
 
@@ -81,15 +127,18 @@ public:
     }
 
     void drawConnection(sf::RenderTarget& target) {
-        if (connectedTo == nullptr) { return; }
+        
+        // if (connectedTo == nullptr) { return; }
 
-        sf::Vertex line[2];
-        line[0].position = shape.getPosition();
-        line[0].color = sf::Color(3, 127, 252);
-        line[1].position = connectedTo->getPosition();
-        line[1].color = sf::Color(3, 127, 252);
+        for (auto pin : outputs) {
+            sf::Vertex line[2];
+            line[0].position = shape.getPosition();
+            line[0].color = sf::Color(3, 127, 252);
+            line[1].position = pin->getPosition();
+            line[1].color = sf::Color(3, 127, 252);
 
-        target.draw(line, 2, sf::Lines);
+            target.draw(line, 2, sf::Lines);
+        }
     }
 
     void setOffset(sf::Vector2f off) {
@@ -139,6 +188,18 @@ public:
 
         return truth;
     }
+
+    bool tryRightClick(sf::Vector2f pos) {
+        bool truth = shape.getGlobalBounds().contains(pos);
+
+        if (truth) {
+            onPinRightClicked(this);
+        }
+
+        //std::cout << shape.getGlobalBounds().left << " " << shape.getGlobalBounds().top << "   " << pos.x << " " << pos.y << std::endl;
+
+        return truth;
+    }
 };
 
 class Gate {
@@ -146,6 +207,7 @@ private:
 
 public:
     virtual bool tryClick(sf::Vector2f pos) = 0;
+    virtual bool tryRightClick(sf::Vector2f pos) = 0;
     virtual bool pinHover(sf::Vector2f pos) = 0;
     virtual void position(sf::Vector2f pos) = 0;
     virtual bool isInBounds(float x, float y) = 0;
@@ -175,6 +237,10 @@ public:
 
     bool tryClick(sf::Vector2f pos) {
         return inputA.tryClick(pos) || inputB.tryClick(pos) || output.tryClick(pos);
+    }
+
+    bool tryRightClick(sf::Vector2f pos) {
+        return inputA.tryRightClick(pos) || inputB.tryRightClick(pos) || output.tryRightClick(pos);
     }
 
     bool pinHover(sf::Vector2f pos) {
@@ -227,6 +293,10 @@ public:
 
     bool tryClick(sf::Vector2f pos) {
         return inputA.tryClick(pos) || inputB.tryClick(pos) || output.tryClick(pos);
+    }
+
+    bool tryRightClick(sf::Vector2f pos) {
+        return inputA.tryRightClick(pos) || inputB.tryRightClick(pos) || output.tryRightClick(pos);
     }
 
     bool pinHover(sf::Vector2f pos) {
@@ -302,11 +372,21 @@ int main()
                         break;
                     }
 
-                    if (gate->tryClick(sf::Vector2f(event.mouseButton.x, event.mouseButton.y))) {
-                        std::cout << "Pin click" << std::endl;
+                    if (event.mouseButton.button == sf::Mouse::Left) {
+                        if (gate->tryClick(sf::Vector2f(event.mouseButton.x, event.mouseButton.y))) {
+                            std::cout << "Pin click" << std::endl;
 
-                        break;
+                            break;
+                        }
                     }
+                    else if (event.mouseButton.button == sf::Mouse::Right) {
+                        if (gate->tryRightClick(sf::Vector2f(event.mouseButton.x, event.mouseButton.y))) {
+                            std::cout << "Pin right click" << std::endl;
+
+                            break;
+                        }
+                    }
+
                 }
             }
 
