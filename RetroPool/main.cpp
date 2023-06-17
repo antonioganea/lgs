@@ -631,6 +631,69 @@ public:
     }
 };
 
+class XORGate : public Gate {
+private:
+    sf::RectangleShape body;
+    Pin inputA, inputB, output;
+    sf::Text text;
+public:
+    XORGate() : inputA(PinType::Input), inputB(PinType::Input), output(PinType::Output) {
+        body.setSize(sf::Vector2f(50, 50));
+        body.setFillColor(sf::Color(64, 64, 64));
+        body.setOrigin(25, 25);
+
+        inputA.setOffset(sf::Vector2f(-25 + 5, 25 + 5));
+        inputB.setOffset(sf::Vector2f(+25 - 5, 25 + 5));
+        output.setOffset(sf::Vector2f(0, -25 - 5));
+
+        text.setFont(font);
+        text.setString("XOR");
+
+        position(sf::Vector2f(0, 0));
+
+        inputA.inputFor = this;
+        inputB.inputFor = this;
+    }
+
+    void updateState() {
+        output.update(inputA.cachedState != inputB.cachedState);
+    }
+
+    bool tryClick(sf::Vector2f pos) {
+        return inputA.tryClick(pos) || inputB.tryClick(pos) || output.tryClick(pos);
+    }
+
+    bool tryRightClick(sf::Vector2f pos) {
+        return inputA.tryRightClick(pos) || inputB.tryRightClick(pos) || output.tryRightClick(pos);
+    }
+
+    bool pinHover(sf::Vector2f pos) {
+        return inputA.pinHover(pos) || inputB.pinHover(pos) || output.pinHover(pos);
+    }
+
+    void position(sf::Vector2f pos) {
+        body.setPosition(pos);
+        inputA.setPosition(pos);
+        inputB.setPosition(pos);
+        output.setPosition(pos);
+
+        sf::FloatRect textRect = text.getGlobalBounds();
+        text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
+    }
+
+    bool isInBounds(float x, float y) {
+        return body.getGlobalBounds().contains(sf::Vector2f(x, y));
+    }
+
+    void draw(sf::RenderTarget& target) {
+        target.draw(body);
+        inputA.draw(target);
+        inputB.draw(target);
+        output.draw(target);
+        target.draw(text);
+    }
+};
+
 int main()
 {
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Logic Gate Simulator");
@@ -684,6 +747,11 @@ int main()
                 }
                 if (event.key.code == sf::Keyboard::W) {
                     auto gate = new NOTGate();
+                    gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
+                    gates.push_back(gate);
+                }
+                if (event.key.code == sf::Keyboard::S) {
+                    auto gate = new XORGate();
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
