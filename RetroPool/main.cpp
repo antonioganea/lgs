@@ -397,6 +397,77 @@ public:
 };
 Switch* Switch::clickedOn = nullptr;
 
+
+class Light : public Gate {
+private:
+    sf::RectangleShape body;
+    sf::RectangleShape indicator;
+    Pin input;
+    sf::Text text;
+    bool state = false;
+public:
+
+    static Switch* clickedOn;
+
+    Light() : input(PinType::Input) {
+        body.setSize(sf::Vector2f(50, 50));
+        body.setFillColor(sf::Color(64, 64, 64));
+        body.setOrigin(25, 25);
+
+        input.setOffset(sf::Vector2f(0, 25 + 5));
+
+        text.setFont(font);
+        text.setString("Light");
+        text.setCharacterSize(12);
+
+        indicator.setSize(sf::Vector2f(5, 5));
+        indicator.setFillColor(sf::Color::Red);
+        indicator.setOrigin(2.5f, 2.5f + 10.f);
+
+        position(sf::Vector2f(0, 0));
+    }
+
+    void toggle() {
+        std::cout << "TOGGLED SWITCH" << std::endl;
+
+        state = !state;
+
+        indicator.setFillColor(state ? sf::Color::Green : sf::Color::Red);
+    }
+
+    bool tryClick(sf::Vector2f pos) {
+        return input.tryClick(pos);
+    }
+
+    bool tryRightClick(sf::Vector2f pos) {
+        return input.tryRightClick(pos);
+    }
+
+    bool pinHover(sf::Vector2f pos) {
+        return input.pinHover(pos);
+    }
+
+    void position(sf::Vector2f pos) {
+        body.setPosition(pos);
+        input.setPosition(pos);
+        indicator.setPosition(pos);
+
+        sf::FloatRect textRect = text.getGlobalBounds();
+        text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
+    }
+
+    bool isInBounds(float x, float y) {
+        return body.getGlobalBounds().contains(sf::Vector2f(x, y));
+    }
+
+    void draw(sf::RenderTarget& target) {
+        target.draw(body);
+        input.draw(target);
+        target.draw(indicator);
+        target.draw(text);
+    }
+};
+
 int main()
 {
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Logic Gate Simulator");
@@ -439,6 +510,11 @@ int main()
                 }
                 if (event.key.code == sf::Keyboard::E) {
                     auto gate = new Switch();
+                    gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
+                    gates.push_back(gate);
+                }
+                if (event.key.code == sf::Keyboard::R) {
+                    auto gate = new Light();
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
