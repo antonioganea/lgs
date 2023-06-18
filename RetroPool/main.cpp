@@ -987,6 +987,66 @@ public:
     }
 };
 
+Gate* newGateOfType(GateType type) {
+    switch (type) {
+        case GateType::OR:
+            return new ORGate();
+        case GateType::AND:
+            return new ANDGate();
+        case GateType::NOT:
+            return new NOTGate();
+        case GateType::XOR:
+            return new XORGate();
+        case GateType::SWITCH:
+            return new Switch();
+        case GateType::LIGHT:
+            return new Light();
+    }
+
+    return nullptr;
+}
+
+void loadFromFile(std::vector<Gate*>& gates, std::ifstream& inputStream) {
+    int gateCount;
+
+    inputStream >> gateCount;
+
+    std::map<int, Gate*> gatesByIndex;
+
+    for (int i = 0; i < gateCount; i++) {
+        int gateID; // note : really, can get rid of this because all the id's are in incrementing order 0, 1, 2 ...
+        int gateType;
+        sf::Vector2f position;
+
+        inputStream >> gateID >> gateType >> position.x >> position.y;
+
+        std::cout << gateID << " " << gateType << " " << position.x << " " << position.y;
+
+        Gate * newGate = newGateOfType((GateType)gateType);
+        newGate->position(position);
+
+        gatesByIndex[gateID] = newGate;
+
+        gates.push_back(newGate);
+    }
+
+    int connectionCount;
+
+    inputStream >> connectionCount;
+
+    for (int i = 0; i < connectionCount; i++) {
+        // gate A -> gate B
+
+        int gateA, gateB, pinA, pinB;
+
+        inputStream >> gateB >> pinB >> gateA >> pinA;
+
+        Pin* outputPin = gatesByIndex[gateA]->getPinByIndex(PinType::Output, pinA);
+        Pin* inputPin = gatesByIndex[gateB]->getPinByIndex(PinType::Input, pinB);
+
+        Pin::connectPins(outputPin, inputPin);
+    }
+}
 
 void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream) {
     //std::cout << "Listing pieces" << std::endl;
@@ -1014,7 +1074,7 @@ void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream) {
         auto pos = gate->getPosition();
         //std::cout << "Gate ID : " << gateNumbers[gate] << " type : " << (int)gate->getGateType() << " position : " << pos.x << " " << pos.y << std::endl;
 
-        outputStream << gateNumbers[gate] << " " << (int)gate->getGateType() << pos.x << " " << pos.y << std::endl;
+        outputStream << gateNumbers[gate] << " " << (int)gate->getGateType() << " " << pos.x << " " << pos.y << std::endl;
     }
 
     //std::cout << "Total connections " << totalConnections << std::endl;
@@ -1052,9 +1112,9 @@ int main()
 
     std::vector<Gate*> gates;
 
-    auto starterGate = new ORGate();
-    starterGate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT)/2.0f);
-    gates.push_back(starterGate);
+    //auto starterGate = new ORGate();
+    //starterGate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT)/2.0f);
+    //gates.push_back(starterGate);
 
     font.loadFromFile("assets/roboto.ttf"); // TODO : better font loading
 
@@ -1098,12 +1158,12 @@ int main()
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
-                if (event.key.code == sf::Keyboard::S) {
+                if (event.key.code == sf::Keyboard::S && !event.key.control) {
                     auto gate = new XORGate();
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
-                if (event.key.code == sf::Keyboard::X) {
+                if (event.key.code == sf::Keyboard::S && event.key.control) {
                     std::cout << "Saving ..." << std::endl;
                     
                     std::ofstream ofs("saveFile.txt", std::ofstream::out);
@@ -1111,6 +1171,25 @@ int main()
                     ofs.close();
 
                     std::cout << "Saved!" << std::endl;
+                }
+                if (event.key.code == sf::Keyboard::O && event.key.control) {
+                    std::cout << "Loading ..." << std::endl;
+
+                    //gates.clear(); //causes memory leak
+
+                    std::ifstream ifs("saveFile.txt", std::ifstream::in);
+
+                    loadFromFile(gates, ifs);
+
+                    ifs.close();
+
+                    std::cout << "Loaded!" << std::endl;
+                }
+                if (event.key.code == sf::Keyboard::N && event.key.control) {
+                    for (auto gate : gates) {
+                        delete gate;
+                    }
+                    gates.clear();
                 }
             }
 
