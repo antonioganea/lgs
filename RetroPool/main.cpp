@@ -986,6 +986,61 @@ public:
     }
 };
 
+
+void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream) {
+    //std::cout << "Listing pieces" << std::endl;
+
+    std::map<Gate*, int> gateNumbers;
+
+    int counter = 0;
+    int totalConnections = 0;
+    for (auto gate : gates) {
+        gateNumbers[gate] = counter;
+        counter++;
+
+        int c = gate->getInputPinCount();
+        Pin* pins = gate->getInputPins();
+        for (int i = 0; i < c; i++) {
+            if (pins[i].connectedTo != nullptr) {
+                totalConnections++;
+            }
+        }
+    }
+
+    std::cout << counter << std::endl;
+
+    for (auto gate : gates) {
+        auto pos = gate->getPosition();
+        //std::cout << "Gate ID : " << gateNumbers[gate] << " type : " << (int)gate->getGateType() << " position : " << pos.x << " " << pos.y << std::endl;
+
+        outputStream << gateNumbers[gate] << " " << (int)gate->getGateType() << pos.x << " " << pos.y << std::endl;
+    }
+
+    //std::cout << "Total connections " << totalConnections << std::endl;
+    std::cout << totalConnections << std::endl;
+
+    for (auto gate : gates) {
+        int c = gate->getInputPinCount();
+        Pin* pins = gate->getInputPins();
+        for (int i = 0; i < c; i++) {
+            Pin* outputPin = pins[i].connectedTo;
+            if (outputPin != nullptr) {
+                int tempIndex = 0;
+                if (outputPin->parentGate->getPinIndex(outputPin, PinType::Output, tempIndex)) {
+                    //std::cout << gateNumbers[gate] << " " << i << " " << gateNumbers[outputPin->parentGate] << " " << tempIndex << std::endl;
+                    outputStream << gateNumbers[gate] << " " << i << " " << gateNumbers[outputPin->parentGate] << " " << tempIndex << std::endl;
+                }
+                else {
+                    std::cerr << "======FAIL TO REVERSE LOOKUP PIN INDEX========" << std::endl;
+                }
+            }
+        }
+    }
+
+    //std::cout << "End of listing" << std::endl;
+}
+
+
 int main()
 {
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Logic Gate Simulator");
@@ -1048,53 +1103,7 @@ int main()
                     gates.push_back(gate);
                 }
                 if (event.key.code == sf::Keyboard::X) {
-                    std::cout << "Listing pieces" << std::endl;
-
-                    std::map<Gate*, int> gateNumbers;
-
-                    int counter = 0;
-                    int totalConnections = 0;
-                    for (auto gate : gates) {
-                        gateNumbers[gate] = counter;
-                        counter++;
-
-                        int c = gate->getInputPinCount();
-                        Pin* pins = gate->getInputPins();
-                        for (int i = 0; i < c; i++) {
-                            if (pins[i].connectedTo != nullptr) {
-                                totalConnections++;
-                            }
-                        }
-                    }
-
-                    std::cout << counter << std::endl;
-
-                    for (auto gate : gates) {
-                        auto pos = gate->getPosition();
-                        std::cout << "Gate ID : " << gateNumbers[gate] << " type : " << (int)gate->getGateType() << " position : " << pos.x << " " << pos.y << std::endl;
-                    }
-
-                    std::cout << "Total connections " << totalConnections << std::endl;
-
-                    for (auto gate : gates) {
-                        int c = gate->getInputPinCount();
-                        Pin* pins = gate->getInputPins();
-                        for (int i = 0; i < c; i++) {
-                            Pin* outputPin = pins[i].connectedTo;
-                            if (outputPin != nullptr) {
-                                int tempIndex = 0;
-                                if (outputPin->parentGate->getPinIndex(outputPin, PinType::Output, tempIndex)) {
-                                    std::cout << gateNumbers[gate] << " " << i << " " << gateNumbers[outputPin->parentGate] << " " << tempIndex << std::endl;
-                                }
-                                else {
-                                    std::cout << "FAIL TO REVERSE LOOKUP PIN INDEX" << std::endl;
-                                }
-                                
-                            }
-                        }
-                    }
-                    
-                    std::cout << "End of listing" << std::endl;
+                    saveToFile(gates, std::cout);
                 }
             }
 
