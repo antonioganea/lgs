@@ -1,4 +1,5 @@
 RetroPool/sfml.props
+RetroPool/saveFile.txt
 *.dll
 
 

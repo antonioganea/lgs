@@ -4,6 +4,7 @@
 #include <queue>
 #include <algorithm>
 #include <map>
+#include <fstream>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
@@ -1007,7 +1008,7 @@ void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream) {
         }
     }
 
-    std::cout << counter << std::endl;
+    outputStream << counter << std::endl;
 
     for (auto gate : gates) {
         auto pos = gate->getPosition();
@@ -1017,7 +1018,7 @@ void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream) {
     }
 
     //std::cout << "Total connections " << totalConnections << std::endl;
-    std::cout << totalConnections << std::endl;
+    outputStream << totalConnections << std::endl;
 
     for (auto gate : gates) {
         int c = gate->getInputPinCount();
@@ -1103,7 +1104,13 @@ int main()
                     gates.push_back(gate);
                 }
                 if (event.key.code == sf::Keyboard::X) {
-                    saveToFile(gates, std::cout);
+                    std::cout << "Saving ..." << std::endl;
+                    
+                    std::ofstream ofs("saveFile.txt", std::ofstream::out);
+                    saveToFile(gates, ofs);
+                    ofs.close();
+
+                    std::cout << "Saved!" << std::endl;
                 }
             }
 
