@@ -3,6 +3,7 @@
 #include <vector>
 #include <queue>
 #include <algorithm>
+#include <map>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
@@ -10,28 +11,25 @@
 sf::Font font;
 
 class Pin;
-
-class Gate {
-private:
-
-public:
-    virtual bool tryClick(sf::Vector2f pos) = 0;
-    virtual bool tryRightClick(sf::Vector2f pos) = 0;
-    virtual bool pinHover(sf::Vector2f pos) = 0;
-    virtual void position(sf::Vector2f pos) = 0;
-    virtual bool isInBounds(float x, float y) = 0;
-    virtual void draw(sf::RenderTarget& target) = 0;
-    virtual void updateState() = 0;
-};
-
-Pin* hoveredPin = nullptr;
-
-Pin* firstPinSelected = nullptr;
+class Gate;
 
 enum class PinType {
     Input,
     Output
 };
+
+enum class GateType {
+    OR,
+    AND,
+    NOT,
+    XOR,
+    SWITCH,
+    LIGHT
+};
+
+Pin* hoveredPin = nullptr;
+
+Pin* firstPinSelected = nullptr;
 
 class Pin {
 private:
@@ -42,7 +40,7 @@ public:
     PinType pinType;
     Pin* connectedTo; // for input pins
     std::vector<Pin*> outputs; // for output pins
-    Gate* inputFor;
+    Gate* parentGate;
     bool cachedState;
 
     void update(bool state);
@@ -62,7 +60,74 @@ public:
     bool tryRightClick(sf::Vector2f pos);
 };
 
+class Gate {
+private:
 
+public:
+    virtual bool tryClick(sf::Vector2f pos) = 0;
+    virtual bool tryRightClick(sf::Vector2f pos) = 0;
+    virtual bool pinHover(sf::Vector2f pos) = 0;
+    virtual void position(sf::Vector2f pos) = 0;
+    virtual bool isInBounds(float x, float y) = 0;
+    virtual void draw(sf::RenderTarget& target) = 0;
+    virtual void updateState() = 0;
+    virtual sf::Vector2f getPosition() = 0;
+    virtual GateType getGateType() = 0;
+
+    virtual int getInputPinCount() = 0;
+    virtual int getOutputPinCount() = 0;
+
+    virtual Pin* getInputPins() = 0;
+    virtual Pin* getOutputPins() = 0;
+
+    virtual bool getPinIndex(Pin* pin, PinType pt, int& outIndex) {
+        if (pt == PinType::Input) {
+            int c = getInputPinCount();
+            Pin* pins = getInputPins();
+            for (int i = 0; i < c; i++) {
+                if ((pins+i) == pin) {
+                    outIndex = i;
+                    return true;
+                }
+            }
+        }
+        else if (pt == PinType::Output) {
+            int c = getOutputPinCount();
+            Pin* pins = getOutputPins();
+            for (int i = 0; i < c; i++) {
+                if ((pins+i) == pin) {
+                    outIndex = i;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+
+    virtual Pin* getPinByIndex(PinType pt, int index) {
+        if (pt == PinType::Input) {
+            int c = getInputPinCount();
+            Pin* pins = getInputPins();
+            
+            if (index >= 0 && index < c) {
+                return pins + index;
+            }
+        }
+        else if (pt == PinType::Output) {
+            int c = getOutputPinCount();
+            Pin* pins = getOutputPins();
+            if (index >= 0 && index < c) {
+                return pins + index;
+            }
+        }
+
+        return nullptr;
+    }
+
+    //virtual Pin** serializeInputs() = 0;
+    //virtual void deserializeInputs(Pin** pins) = 0;
+};
 
 
 struct SimulationUpdate {
@@ -136,8 +201,8 @@ void Pin::update(bool state) {
     cachedState = state;
         
     if (pinType == PinType::Input) {
-        if (inputFor != nullptr) {
-            inputFor->updateState();// propagate into component
+        if (parentGate != nullptr) {
+            parentGate->updateState();// propagate into component
         }
     }
     if (pinType == PinType::Output) {
@@ -323,15 +388,27 @@ bool Pin::tryRightClick(sf::Vector2f pos) {
 class ORGate : public Gate {
 private:
     sf::RectangleShape body;
-    Pin inputA, inputB, output;
+
+    union {
+        struct {
+            Pin inputA, inputB;
+        };
+        Pin inputPins[2];
+    };
+
+    union {
+        Pin output;
+        Pin outputPins[1];
+    };
+
     sf::Text text;
 public:
     ORGate() : inputA(PinType::Input), inputB(PinType::Input), output(PinType::Output) {
         body.setSize(sf::Vector2f(50, 50));
-        body.setFillColor(sf::Color(64,64,64));
+        body.setFillColor(sf::Color(64, 64, 64));
         body.setOrigin(25, 25);
 
-        inputA.setOffset(sf::Vector2f( - 25 + 5, 25 + 5));
+        inputA.setOffset(sf::Vector2f(-25 + 5, 25 + 5));
         inputB.setOffset(sf::Vector2f(+25 - 5, 25 + 5));
         output.setOffset(sf::Vector2f(0, -25 - 5));
 
@@ -340,8 +417,9 @@ public:
 
         position(sf::Vector2f(0, 0));
 
-        inputA.inputFor = this;
-        inputB.inputFor = this;
+        inputA.parentGate = this;
+        inputB.parentGate = this;
+        output.parentGate = this;
     }
 
     void updateState() {
@@ -370,8 +448,16 @@ public:
         text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
     }
 
+    sf::Vector2f getPosition() {
+        return body.getPosition();
+    }
+
+    GateType getGateType() {
+        return GateType::OR;
+    }
+
     bool isInBounds(float x, float y) {
-        return body.getGlobalBounds().contains(sf::Vector2f(x,y));
+        return body.getGlobalBounds().contains(sf::Vector2f(x, y));
     }
 
     void draw(sf::RenderTarget& target) {
@@ -381,12 +467,40 @@ public:
         output.draw(target);
         target.draw(text);
     }
+
+    int getInputPinCount() {
+        return 2;
+    }
+
+    int getOutputPinCount() {
+        return 1;
+    }
+
+    Pin* getInputPins() {
+        return inputPins;
+    }
+
+    Pin* getOutputPins() {
+        return outputPins;
+    }
 };
 
 class ANDGate : public Gate {
 private:
     sf::RectangleShape body;
-    Pin inputA, inputB, output;
+
+    union {
+        struct {
+            Pin inputA, inputB;
+        };
+        Pin inputPins[2];
+    };
+
+    union {
+        Pin output;
+        Pin outputPins[1];
+    };
+
     sf::Text text;
 public:
     ANDGate() : inputA(PinType::Input), inputB(PinType::Input), output(PinType::Output) {
@@ -403,8 +517,9 @@ public:
 
         position(sf::Vector2f(0, 0));
 
-        inputA.inputFor = this;
-        inputB.inputFor = this;
+        inputA.parentGate = this;
+        inputB.parentGate = this;
+        output.parentGate = this;
     }
 
     void updateState() {
@@ -433,6 +548,14 @@ public:
         text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
     }
 
+    sf::Vector2f getPosition() {
+        return body.getPosition();
+    }
+
+    GateType getGateType() {
+        return GateType::AND;
+    }
+
     bool isInBounds(float x, float y) {
         return body.getGlobalBounds().contains(sf::Vector2f(x, y));
     }
@@ -444,13 +567,34 @@ public:
         output.draw(target);
         target.draw(text);
     }
+
+    int getInputPinCount() {
+        return 2;
+    }
+
+    int getOutputPinCount() {
+        return 1;
+    }
+
+    Pin* getInputPins() {
+        return inputPins;
+    }
+
+    Pin* getOutputPins() {
+        return outputPins;
+    }
 };
 
 class Switch : public Gate {
 private:
     sf::RectangleShape body;
     sf::RectangleShape indicator;
-    Pin output;
+
+    union {
+        Pin output;
+        Pin outputPins[1];
+    };
+
     sf::Text text;
     bool state = false;
 public:
@@ -473,6 +617,8 @@ public:
         indicator.setOrigin(2.5f, 2.5f + 10.f);
 
         position(sf::Vector2f(0, 0));
+
+        output.parentGate = this;
     }
 
     void updateState() {
@@ -510,6 +656,14 @@ public:
         text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
     }
 
+    sf::Vector2f getPosition() {
+        return body.getPosition();
+    }
+
+    GateType getGateType() {
+        return GateType::SWITCH;
+    }
+
     bool isInBounds(float x, float y) {
         return body.getGlobalBounds().contains(sf::Vector2f(x, y));
     }
@@ -520,6 +674,22 @@ public:
         target.draw(indicator);
         target.draw(text);
     }
+
+    int getInputPinCount() {
+        return 0;
+    }
+
+    int getOutputPinCount() {
+        return 1;
+    }
+
+    Pin* getInputPins() {
+        return nullptr;
+    }
+
+    Pin* getOutputPins() {
+        return outputPins;
+    }
 };
 Switch* Switch::clickedOn = nullptr;
 
@@ -528,7 +698,11 @@ class Light : public Gate {
 private:
     sf::RectangleShape body;
     sf::RectangleShape indicator;
-    Pin input;
+    union {
+        Pin input;
+        Pin inputPins[1];
+    };
+
     sf::Text text;
     bool state = false;
 public:
@@ -552,7 +726,7 @@ public:
 
         position(sf::Vector2f(0, 0));
 
-        input.inputFor = this;
+        input.parentGate = this;
     }
 
     void updateState() {
@@ -580,6 +754,13 @@ public:
         text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
     }
 
+    sf::Vector2f getPosition() {
+        return body.getPosition();
+    }
+    GateType getGateType() {
+        return GateType::LIGHT;
+    }
+
     bool isInBounds(float x, float y) {
         return body.getGlobalBounds().contains(sf::Vector2f(x, y));
     }
@@ -590,12 +771,40 @@ public:
         target.draw(indicator);
         target.draw(text);
     }
+
+    int getInputPinCount() {
+        return 1;
+    }
+
+    int getOutputPinCount() {
+        return 0;
+    }
+
+    Pin* getInputPins() {
+        return inputPins;
+    }
+
+    Pin* getOutputPins() {
+        return nullptr;
+    }
 };
 
 class NOTGate : public Gate {
 private:
     sf::RectangleShape body;
-    Pin input, output;
+
+    union {
+        struct {
+            Pin input;
+        };
+        Pin inputPins[1];
+    };
+
+    union {
+        Pin output;
+        Pin outputPins[1];
+    };
+
     sf::Text text;
 public:
     NOTGate() : input(PinType::Input), output(PinType::Output) {
@@ -611,7 +820,8 @@ public:
 
         position(sf::Vector2f(0, 0));
 
-        input.inputFor = this;
+        input.parentGate = this;
+        output.parentGate = this;
         output.update(true);
     }
 
@@ -640,6 +850,14 @@ public:
         text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
     }
 
+    sf::Vector2f getPosition() {
+        return body.getPosition();
+    }
+
+    GateType getGateType() {
+        return GateType::NOT;
+    }
+
     bool isInBounds(float x, float y) {
         return body.getGlobalBounds().contains(sf::Vector2f(x, y));
     }
@@ -650,12 +868,40 @@ public:
         output.draw(target);
         target.draw(text);
     }
+
+    int getInputPinCount() {
+        return 1;
+    }
+
+    int getOutputPinCount() {
+        return 1;
+    }
+
+    Pin* getInputPins() {
+        return inputPins;
+    }
+
+    Pin* getOutputPins() {
+        return outputPins;
+    }
 };
 
 class XORGate : public Gate {
 private:
     sf::RectangleShape body;
-    Pin inputA, inputB, output;
+
+    union {
+        struct {
+            Pin inputA, inputB;
+        };
+        Pin inputPins[2];
+    };
+
+    union {
+        Pin output;
+        Pin outputPins[1];
+    };
+
     sf::Text text;
 public:
     XORGate() : inputA(PinType::Input), inputB(PinType::Input), output(PinType::Output) {
@@ -672,8 +918,9 @@ public:
 
         position(sf::Vector2f(0, 0));
 
-        inputA.inputFor = this;
-        inputB.inputFor = this;
+        inputA.parentGate = this;
+        inputB.parentGate = this;
+        output.parentGate = this;
     }
 
     void updateState() {
@@ -702,6 +949,14 @@ public:
         text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
     }
 
+    sf::Vector2f getPosition() {
+        return body.getPosition();
+    }
+
+    GateType getGateType() {
+        return GateType::XOR;
+    }
+
     bool isInBounds(float x, float y) {
         return body.getGlobalBounds().contains(sf::Vector2f(x, y));
     }
@@ -712,6 +967,22 @@ public:
         inputB.draw(target);
         output.draw(target);
         target.draw(text);
+    }
+
+    int getInputPinCount() {
+        return 2;
+    }
+
+    int getOutputPinCount() {
+        return 1;
+    }
+
+    Pin* getInputPins() {
+        return inputPins;
+    }
+
+    Pin* getOutputPins() {
+        return outputPins;
     }
 };
 
@@ -775,6 +1046,55 @@ int main()
                     auto gate = new XORGate();
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
+                }
+                if (event.key.code == sf::Keyboard::X) {
+                    std::cout << "Listing pieces" << std::endl;
+
+                    std::map<Gate*, int> gateNumbers;
+
+                    int counter = 0;
+                    int totalConnections = 0;
+                    for (auto gate : gates) {
+                        gateNumbers[gate] = counter;
+                        counter++;
+
+                        int c = gate->getInputPinCount();
+                        Pin* pins = gate->getInputPins();
+                        for (int i = 0; i < c; i++) {
+                            if (pins[i].connectedTo != nullptr) {
+                                totalConnections++;
+                            }
+                        }
+                    }
+
+                    std::cout << counter << std::endl;
+
+                    for (auto gate : gates) {
+                        auto pos = gate->getPosition();
+                        std::cout << "Gate ID : " << gateNumbers[gate] << " type : " << (int)gate->getGateType() << " position : " << pos.x << " " << pos.y << std::endl;
+                    }
+
+                    std::cout << "Total connections " << totalConnections << std::endl;
+
+                    for (auto gate : gates) {
+                        int c = gate->getInputPinCount();
+                        Pin* pins = gate->getInputPins();
+                        for (int i = 0; i < c; i++) {
+                            Pin* outputPin = pins[i].connectedTo;
+                            if (outputPin != nullptr) {
+                                int tempIndex = 0;
+                                if (outputPin->parentGate->getPinIndex(outputPin, PinType::Output, tempIndex)) {
+                                    std::cout << gateNumbers[gate] << " " << i << " " << gateNumbers[outputPin->parentGate] << " " << tempIndex << std::endl;
+                                }
+                                else {
+                                    std::cout << "FAIL TO REVERSE LOOKUP PIN INDEX" << std::endl;
+                                }
+                                
+                            }
+                        }
+                    }
+                    
+                    std::cout << "End of listing" << std::endl;
                 }
             }
 
