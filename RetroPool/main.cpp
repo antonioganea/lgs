@@ -1056,6 +1056,10 @@ public:
         }
     }
 
+    IntegratedChip(std::vector<Gate*>* _circuit, std::string name) : IntegratedChip(_circuit) {
+        text.setString(name);
+    }
+
     IntegratedChip(std::vector<Gate*> * _circuit) {
 
         circuit = _circuit;
@@ -1586,7 +1590,7 @@ int main()
 
                     ifs.close();
 
-                    auto gate = new IntegratedChip(internalCircuit);
+                    auto gate = new IntegratedChip(internalCircuit, "ADDER");
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
@@ -1600,7 +1604,7 @@ int main()
 
                     ifs.close();
 
-                    auto gate = new IntegratedChip(internalCircuit);
+                    auto gate = new IntegratedChip(internalCircuit, "MEM");
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
@@ -1614,7 +1618,7 @@ int main()
 
                     ifs.close();
 
-                    auto gate = new IntegratedChip(internalCircuit);
+                    auto gate = new IntegratedChip(internalCircuit, "REG");
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
