@@ -1590,6 +1590,34 @@ int main()
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
+                if (event.key.code == sf::Keyboard::P && !event.key.control) {
+
+                    std::vector<Gate*>* internalCircuit = new std::vector<Gate*>();
+
+                    std::ifstream ifs("mem-cell.txt", std::ifstream::in);
+
+                    loadFromFileRecursively(*internalCircuit, ifs);
+
+                    ifs.close();
+
+                    auto gate = new IntegratedChip(internalCircuit);
+                    gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
+                    gates.push_back(gate);
+                }
+                if (event.key.code == sf::Keyboard::L && !event.key.control) {
+
+                    std::vector<Gate*>* internalCircuit = new std::vector<Gate*>();
+
+                    std::ifstream ifs("4-bit-register.txt", std::ifstream::in);
+
+                    loadFromFileRecursively(*internalCircuit, ifs);
+
+                    ifs.close();
+
+                    auto gate = new IntegratedChip(internalCircuit);
+                    gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
+                    gates.push_back(gate);
+                }
                 if (event.key.code == sf::Keyboard::K) {
                     auto list = topoSort(&gates);
 
