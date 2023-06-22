@@ -5,9 +5,13 @@
 #include <algorithm>
 #include <map>
 #include <fstream>
+#include <stack>
+#include <set>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
+
+#define PIN_SIZE 10
 
 sf::Font font;
 
@@ -25,7 +29,8 @@ enum class GateType {
     NOT,
     XOR,
     SWITCH,
-    LIGHT
+    LIGHT,
+    INTEGRATED
 };
 
 Pin* hoveredPin = nullptr;
@@ -49,6 +54,7 @@ public:
     void static onPinClicked(Pin* pin);
     void static onPinRightClicked(Pin* pin);
     void disconnectAll();
+    Pin();
     Pin(PinType pt);
     static void drawTempConnection(sf::RenderTarget& target, sf::Vector2f mousePos);
     void drawConnection(sf::RenderTarget& target);
@@ -71,7 +77,7 @@ public:
     virtual void position(sf::Vector2f pos) = 0;
     virtual bool isInBounds(float x, float y) = 0;
     virtual void draw(sf::RenderTarget& target) = 0;
-    virtual void updateState() = 0;
+    virtual void updateState(Pin * updatedPin) = 0;
     virtual sf::Vector2f getPosition() = 0;
     virtual GateType getGateType() = 0;
 
@@ -203,7 +209,7 @@ void Pin::update(bool state) {
         
     if (pinType == PinType::Input) {
         if (parentGate != nullptr) {
-            parentGate->updateState();// propagate into component
+            parentGate->updateState(this);// propagate into component
         }
     }
     if (pinType == PinType::Output) {
@@ -286,15 +292,21 @@ void Pin::disconnectAll() {
     }
 }
 
+Pin::Pin() : Pin(PinType::Input) {
+    //std::cout << "Default constructor";
+}
+
 Pin::Pin(PinType pt) {
     connectedTo = nullptr;
 
-    shape.setSize(sf::Vector2f(10, 10));
+    shape.setSize(sf::Vector2f(PIN_SIZE, PIN_SIZE));
     shape.setFillColor(sf::Color(200, 200, 200));
-    shape.setOrigin(5, 5);
+    shape.setOrigin(PIN_SIZE/2.0f, PIN_SIZE/2.0f);
     shape.setPosition(-25 + 5, 25 + 5);
 
     pinType = pt;
+
+    cachedState = false;
 }
 
 void Pin::drawTempConnection(sf::RenderTarget& target, sf::Vector2f mousePos) {
@@ -423,7 +435,7 @@ public:
         output.parentGate = this;
     }
 
-    void updateState() {
+    void updateState(Pin* updatedPin) {
         output.update(inputA.cachedState || inputB.cachedState);
     }
 
@@ -523,7 +535,7 @@ public:
         output.parentGate = this;
     }
 
-    void updateState() {
+    void updateState(Pin* updatedPin) {
         output.update(inputA.cachedState && inputB.cachedState);
     }
 
@@ -622,7 +634,7 @@ public:
         output.parentGate = this;
     }
 
-    void updateState() {
+    void updateState(Pin* updatedPin) {
         // ...
     }
 
@@ -634,6 +646,12 @@ public:
         indicator.setFillColor(state ? sf::Color::Green : sf::Color::Red);
 
         output.update(state);
+    }
+
+    void setState(bool _state) {
+        if (state != _state) {
+            toggle();
+        }
     }
 
     bool tryClick(sf::Vector2f pos) {
@@ -730,7 +748,7 @@ public:
         input.parentGate = this;
     }
 
-    void updateState() {
+    void updateState(Pin* updatedPin) {
         indicator.setFillColor(input.cachedState ? sf::Color::Green : sf::Color::Red);
     }
 
@@ -826,7 +844,7 @@ public:
         output.update(true);
     }
 
-    void updateState() {
+    void updateState(Pin* updatedPin) {
         output.update(!input.cachedState);
     }
 
@@ -924,7 +942,7 @@ public:
         output.parentGate = this;
     }
 
-    void updateState() {
+    void updateState(Pin* updatedPin) {
         output.update(inputA.cachedState != inputB.cachedState);
     }
 
@@ -986,6 +1004,308 @@ public:
         return outputPins;
     }
 };
+
+
+
+
+
+/*
+class CircuitGraph {
+private:
+
+public:
+    CircuitGraph() {
+
+    }
+};
+*/
+
+
+
+class IntegratedChip : public Gate {
+private:
+    sf::RectangleShape body;
+
+    Pin * inputPins, * outputPins;
+    int inputPinCount, outputPinCount;
+
+    sf::Text text;
+
+    std::map<Pin*, Switch*> inputToSwitches;
+
+public:
+    std::vector<Gate*>* circuit;
+
+    static void getCircuitIOCount(const std::vector<Gate*> & circuit, int & inputs, int & outputs) {
+        inputs = 0;
+        outputs = 0;
+        for (auto gate : circuit) {
+            Switch* sw = dynamic_cast<Switch*>(gate);
+
+            if (sw != nullptr) {
+                inputs++;
+                continue;
+            }
+
+            Light* lt = dynamic_cast<Light*>(gate);
+
+            if (lt != nullptr) {
+                outputs++;
+                continue;
+            }
+        }
+    }
+
+    IntegratedChip(std::vector<Gate*> * _circuit) {
+
+        circuit = _circuit;
+
+        // : inputA(PinType::Input), inputB(PinType::Input), output(PinType::Output)
+
+        IntegratedChip::getCircuitIOCount(*circuit, inputPinCount, outputPinCount);
+
+        inputPins = new Pin[inputPinCount];
+        outputPins = new Pin[outputPinCount];
+
+        for (int i = 0; i < outputPinCount; i++) {
+            outputPins[i].pinType = PinType::Output;
+        }
+
+        sf::Vector2f bodySize(50, 50);
+        bodySize.x += PIN_SIZE * inputPinCount; // TODO : make this better
+
+        body.setSize(bodySize);
+        body.setFillColor(sf::Color(64, 64, 64));
+        body.setOrigin(bodySize/2.0f);
+
+        //std::cout << "integrated chip : " << inputPinCount << " " << outputPinCount << std::endl;
+
+        for (int i = 0; i < inputPinCount; i++) {
+            inputPins[i].setOffset(sf::Vector2f((i-inputPinCount/2.0f) * PIN_SIZE * 2.0f + PIN_SIZE, bodySize.y / 2.0f + PIN_SIZE / 2.0f));
+        }
+
+        for (int i = 0; i < outputPinCount; i++) {
+            outputPins[i].setOffset(sf::Vector2f((i - outputPinCount / 2.0f) * PIN_SIZE * 2.0f + PIN_SIZE, -(bodySize.y / 2.0f + PIN_SIZE / 2.0f) ));
+        }
+
+        //inputA.setOffset(sf::Vector2f(-25 + 5, 25 + 5));
+        //inputB.setOffset(sf::Vector2f(+25 - 5, 25 + 5));
+        //output.setOffset(sf::Vector2f(0, -25 - 5));
+
+        text.setFont(font);
+        text.setString("CHIP");
+
+        position(sf::Vector2f(0, 0));
+
+        for (int i = 0; i < inputPinCount; i++) {
+            inputPins[i].parentGate = this;
+        }
+        for (int i = 0; i < outputPinCount; i++) {
+            outputPins[i].parentGate = this;
+        }
+
+
+
+
+        int iterator = 0;
+        // Linking inputs
+        for (auto gate : *circuit) {
+            Switch* sw = dynamic_cast<Switch*>(gate);
+
+            if (sw != nullptr) {
+                inputToSwitches[inputPins+iterator] = sw;
+                //sw->setState(false); // not necessary but a good move to set all switches to false upon IC creation
+                iterator++;
+            }
+        }
+
+        iterator = 0;
+        // Linking outputs
+        for (auto gate : *circuit) {
+            Light* lt = dynamic_cast<Light*>(gate);
+
+            if (lt != nullptr) {
+                Pin * p = lt->getInputPins();
+                Pin * o = p->connectedTo;
+
+                Pin::connectPins(o, outputPins + iterator);
+                iterator++;
+            }
+        }
+    }
+
+    void updateState(Pin* updatedPin) {
+        Switch* sw = inputToSwitches[updatedPin];
+
+        Pin* switchOutput = sw->getOutputPins();
+
+        for (auto p : switchOutput->outputs) {
+            p->update(updatedPin->cachedState);
+        }
+
+        //output.update(inputA.cachedState != inputB.cachedState);
+    }
+
+    bool tryClick(sf::Vector2f pos) {
+        //return inputA.tryClick(pos) || inputB.tryClick(pos) || output.tryClick(pos);
+        for (int i = 0; i < inputPinCount; i++) {
+            if (inputPins[i].tryClick(pos)) { return true; }
+        }
+        for (int i = 0; i < outputPinCount; i++) {
+            if (outputPins[i].tryClick(pos)) { return true; }
+        }
+
+        return false;
+    }
+
+    bool tryRightClick(sf::Vector2f pos) {
+        //return inputA.tryRightClick(pos) || inputB.tryRightClick(pos) || output.tryRightClick(pos);
+        for (int i = 0; i < inputPinCount; i++) {
+            if (inputPins[i].tryRightClick(pos)) { return true; }
+        }
+        for (int i = 0; i < outputPinCount; i++) {
+            if (outputPins[i].tryRightClick(pos)) { return true; }
+        }
+
+        return false;
+    }
+
+    bool pinHover(sf::Vector2f pos) {
+        //return inputA.pinHover(pos) || inputB.pinHover(pos) || output.pinHover(pos);
+        for (int i = 0; i < inputPinCount; i++) {
+            if (inputPins[i].pinHover(pos)) { return true; }
+        }
+        for (int i = 0; i < outputPinCount; i++) {
+            if (outputPins[i].pinHover(pos)) { return true; }
+        }
+
+        return false;
+    }
+
+    void position(sf::Vector2f pos) {
+        body.setPosition(pos);
+
+        for (int i = 0; i < inputPinCount; i++) {
+            inputPins[i].setPosition(pos);
+        }
+        for (int i = 0; i < outputPinCount; i++) {
+            outputPins[i].setPosition(pos);
+        }
+
+        sf::FloatRect textRect = text.getGlobalBounds();
+        text.setPosition(pos - sf::Vector2f(textRect.width, textRect.height) / 2.0f);
+    }
+
+    sf::Vector2f getPosition() {
+        return body.getPosition();
+    }
+
+    GateType getGateType() {
+        return GateType::INTEGRATED;
+    }
+
+    bool isInBounds(float x, float y) {
+        return body.getGlobalBounds().contains(sf::Vector2f(x, y));
+    }
+
+    void draw(sf::RenderTarget& target) {
+        target.draw(body);
+
+        for (int i = 0; i < inputPinCount; i++) {
+            inputPins[i].draw(target);
+        }
+        for (int i = 0; i < outputPinCount; i++) {
+            outputPins[i].draw(target);
+        }
+
+        target.draw(text);
+    }
+
+    int getInputPinCount() {
+        return inputPinCount;
+    }
+
+    int getOutputPinCount() {
+        return outputPinCount;
+    }
+
+    Pin* getInputPins() {
+        return inputPins;
+    }
+
+    Pin* getOutputPins() {
+        return outputPins;
+    }
+};
+
+
+
+
+
+typedef std::vector<Gate*>* CircuitPtr;
+
+
+// should fix the fact that this returns a memory-leaky pointer to a vector
+std::vector<CircuitPtr>* topoSort(const CircuitPtr circuit) {
+    std::vector<CircuitPtr> * circuitList = new std::vector<CircuitPtr>;
+
+    std::stack<CircuitPtr> stack;
+
+    stack.push(circuit);
+
+    std::set<CircuitPtr> serializedCircuits;
+
+    while (!stack.empty()) {
+
+        CircuitPtr top = stack.top(); stack.pop();
+
+        bool foundNotSerializedYet = false; // not used
+        for (Gate* gate : *top) {
+            IntegratedChip* ic = dynamic_cast<IntegratedChip*>(gate);
+            if (ic != nullptr) {
+                if (serializedCircuits.find(ic->circuit) != serializedCircuits.end()) { // if it was already serialized
+
+                }
+                else { // if it wasn't previously serialized
+                    stack.push(ic->circuit);
+                    
+                    foundNotSerializedYet = true;
+                }
+            }
+        }
+        if (foundNotSerializedYet) {
+
+        }
+
+        serializedCircuits.insert(top);
+        circuitList->push_back(top);
+    }
+
+    std::reverse(circuitList->begin(), circuitList->end());
+
+    return circuitList;
+}
+
+
+int getIndex(std::vector<CircuitPtr>* v, CircuitPtr K)
+{
+    auto it = std::find(v->begin(), v->end(), K);
+
+    // If element was found
+    if (it != v->end())
+    {
+
+        // calculating the index
+        // of K
+        int index = it - v->begin();
+        return index;
+    }
+    else {
+        return -1;
+    }
+}
+
+
 
 Gate* newGateOfType(GateType type) {
     switch (type) {
@@ -1102,8 +1422,45 @@ void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream) {
 }
 
 
+
+void saveToFileRecursively(std::vector<Gate*>& gates, std::ostream& outputStream) {
+
+
+    // const std::vector<Gate*>*
+
+    auto list = topoSort(&gates);
+
+    /*
+    std::cout << "Performed topo sort on " << &gates << std::endl;
+
+    for (CircuitPtr circuit : *list) {
+        std::cout << circuit << std::endl;
+    }
+    */
+
+
+    outputStream << list->size(); // or capacity ??
+
+    std::cout << "Performed topo sort on " << &gates << std::endl;
+    for (CircuitPtr circuit : *list) {
+        std::cout << "Serializing circuit " << circuit << std::endl;
+        saveToFile(*circuit, outputStream);
+    }
+
+
+    delete list;
+
+}
+
 int main()
 {
+    //std::cout << "making new pin" << std::endl;
+    //Pin mypin;
+    //std::cout << "making new pin ---- end" << std::endl;
+
+
+
+
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Logic Gate Simulator");
     window.setFramerateLimit(60);
 
@@ -1122,6 +1479,8 @@ int main()
 
     sf::View board(sf::Vector2f(0, 0), sf::Vector2f(600, 600));
     board.setViewport(sf::FloatRect(0,0,0.5,1));
+
+    //std::cout << window.getSettings().majorVersion << "." << window.getSettings().majorVersion << std::endl;
 
     while (window.isOpen())
     {
@@ -1162,6 +1521,40 @@ int main()
                     auto gate = new XORGate();
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
+                }
+                if (event.key.code == sf::Keyboard::K) {
+                    auto list = topoSort(&gates);
+
+                    std::cout << "Performed topo sort on " << &gates << std::endl;
+
+                    for (CircuitPtr circuit : *list) {
+                        std::cout << circuit << std::endl;
+                    }
+
+                    delete list;
+                }
+                if (event.key.code == sf::Keyboard::Q) {
+                    std::cout << "Loading Full Adder circuit..." << std::endl;
+
+                    //gates.clear(); //causes memory leak
+
+                    std::ifstream ifs("full-adder.txt", std::ifstream::in);
+
+                    std::vector<Gate*> * fullBitAdderCircuit = new std::vector<Gate*>(); // memory leak if not deleted elsewhere
+
+                    loadFromFile(*fullBitAdderCircuit, ifs);
+
+                    ifs.close();
+
+                    std::cout << "Loaded!" << std::endl;
+
+                    std::cout << "Creating integrated circuit" << std::endl;
+
+                    auto gate = new IntegratedChip(fullBitAdderCircuit);
+                    gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
+                    gates.push_back(gate);
+
+                    std::cout << "Done creating integrated circuit" << std::endl;
                 }
                 if (event.key.code == sf::Keyboard::S && event.key.control) {
                     std::cout << "Saving ..." << std::endl;
