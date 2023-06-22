@@ -1650,7 +1650,7 @@ int main()
 
                     std::cout << "Creating integrated circuit" << std::endl;
 
-                    auto gate = new IntegratedChip(fullBitAdderCircuit);
+                    auto gate = new IntegratedChip(fullBitAdderCircuit, "ADD");
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
 
