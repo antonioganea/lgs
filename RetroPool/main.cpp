@@ -1326,7 +1326,7 @@ Gate* newGateOfType(GateType type) {
     return nullptr;
 }
 
-void loadFromFile(std::vector<Gate*>& gates, std::ifstream& inputStream) {
+void loadFromFile(std::vector<Gate*>& gates, std::ifstream& inputStream, std::vector<CircuitPtr>* circuitList = nullptr) {
     int gateCount;
 
     inputStream >> gateCount;
@@ -1338,11 +1338,29 @@ void loadFromFile(std::vector<Gate*>& gates, std::ifstream& inputStream) {
         int gateType;
         sf::Vector2f position;
 
-        inputStream >> gateID >> gateType >> position.x >> position.y;
+        inputStream >> gateID >> gateType;
+        
+        int circuitID = -1;
+        if (gateType == (int)GateType::INTEGRATED){
+            inputStream >> circuitID >> position.x >> position.y;
+        }
+        else {
+            inputStream >> position.x >> position.y;
+        }
+        
+        
+        std::cout << gateID << " " << gateType << " " << circuitID << " " << position.x << " " << position.y;
 
-        std::cout << gateID << " " << gateType << " " << position.x << " " << position.y;
+        Gate* newGate;
 
-        Gate * newGate = newGateOfType((GateType)gateType);
+        if (circuitID != -1) {
+            newGate = new IntegratedChip((*circuitList)[circuitID]);
+        }
+        else {
+            newGate = newGateOfType((GateType)gateType);
+        }
+
+        
         newGate->position(position);
 
         gatesByIndex[gateID] = newGate;
@@ -1368,7 +1386,7 @@ void loadFromFile(std::vector<Gate*>& gates, std::ifstream& inputStream) {
     }
 }
 
-void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream) {
+void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream, std::vector<CircuitPtr>* circuitList = nullptr) {
     //std::cout << "Listing pieces" << std::endl;
 
     std::map<Gate*, int> gateNumbers;
@@ -1394,7 +1412,17 @@ void saveToFile(const std::vector<Gate*> & gates, std::ostream & outputStream) {
         auto pos = gate->getPosition();
         //std::cout << "Gate ID : " << gateNumbers[gate] << " type : " << (int)gate->getGateType() << " position : " << pos.x << " " << pos.y << std::endl;
 
-        outputStream << gateNumbers[gate] << " " << (int)gate->getGateType() << " " << pos.x << " " << pos.y << std::endl;
+        IntegratedChip* ic = dynamic_cast<IntegratedChip*>(gate);
+        if (ic != nullptr) {
+            int circuitIndex = getIndex(circuitList, ic->circuit);
+            if (circuitIndex == -1) {
+                std::cout << "ERROR : index is -1 on lookup circuits" << std::endl;
+            }
+            outputStream << gateNumbers[gate] << " " << (int)gate->getGateType() << " " << circuitIndex << " " << pos.x << " " << pos.y << std::endl;
+        }
+        else {
+            outputStream << gateNumbers[gate] << " " << (int)gate->getGateType() << " " << pos.x << " " << pos.y << std::endl;
+        }
     }
 
     //std::cout << "Total connections " << totalConnections << std::endl;
@@ -1439,17 +1467,43 @@ void saveToFileRecursively(std::vector<Gate*>& gates, std::ostream& outputStream
     */
 
 
-    outputStream << list->size(); // or capacity ??
+    outputStream << list->size() << std::endl; // or capacity ??
+
+    int counter = 0;
 
     std::cout << "Performed topo sort on " << &gates << std::endl;
     for (CircuitPtr circuit : *list) {
         std::cout << "Serializing circuit " << circuit << std::endl;
-        saveToFile(*circuit, outputStream);
+        outputStream << counter << std::endl;
+        saveToFile(*circuit, outputStream, list);
+        counter++;
     }
 
 
     delete list;
 
+}
+
+void loadFromFileRecursively(std::vector<Gate*>& gates, std::ifstream& inputStream) {
+    int circuitCount;
+
+    inputStream >> circuitCount;
+
+    std::vector<CircuitPtr>* circuitList = new std::vector<CircuitPtr>;
+
+    for (int currentCircuitID = 0; currentCircuitID < circuitCount; currentCircuitID++) {
+        int circuitID;
+        inputStream >> circuitID;
+
+        if (currentCircuitID == circuitCount - 1) { // if the last one
+            loadFromFile(gates, inputStream, circuitList);
+        }
+        else {
+            std::vector<Gate*>* newCircuit = new std::vector<Gate*>();
+            loadFromFile(*newCircuit, inputStream, circuitList);
+            circuitList->push_back(newCircuit);
+        }
+    }
 }
 
 int main()
@@ -1522,6 +1576,20 @@ int main()
                     gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
                     gates.push_back(gate);
                 }
+                if (event.key.code == sf::Keyboard::U && !event.key.control) {
+
+                    std::vector<Gate*>* internalCircuit = new std::vector<Gate*>();
+
+                    std::ifstream ifs("4-bit-adder.txt", std::ifstream::in);
+
+                    loadFromFileRecursively(*internalCircuit, ifs);
+
+                    ifs.close();
+
+                    auto gate = new IntegratedChip(internalCircuit);
+                    gate->position(sf::Vector2f(WINDOW_WIDTH, WINDOW_HEIGHT) / 2.0f);
+                    gates.push_back(gate);
+                }
                 if (event.key.code == sf::Keyboard::K) {
                     auto list = topoSort(&gates);
 
@@ -1564,6 +1632,27 @@ int main()
                     ofs.close();
 
                     std::cout << "Saved!" << std::endl;
+                }
+                if (event.key.code == sf::Keyboard::M && event.key.control) {
+                    std::cout << "Saving recursively ..." << std::endl;
+
+                    std::ofstream ofs("saveFile-rec.txt", std::ofstream::out);
+                    saveToFileRecursively(gates, ofs);
+                    ofs.close();
+
+                    std::cout << "Saved!" << std::endl;
+                }
+                if (event.key.code == sf::Keyboard::B && event.key.control) {
+
+                    std::cout << "Loading recursively ..." << std::endl;
+
+                    std::ifstream ifs("saveFile-rec.txt", std::ifstream::in);
+
+                    loadFromFileRecursively(gates, ifs);
+
+                    ifs.close();
+
+                    std::cout << "Loaded!" << std::endl;
                 }
                 if (event.key.code == sf::Keyboard::O && event.key.control) {
                     std::cout << "Loading ..." << std::endl;
